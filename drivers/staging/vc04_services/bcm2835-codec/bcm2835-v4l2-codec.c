@@ -456,6 +456,7 @@ struct bcm2835_codec_ctx {
 
 struct bcm2835_codec_driver {
 	struct platform_device *pdev;
+	struct media_device	mdev;
 
 	struct bcm2835_codec_dev *encode;
 	struct bcm2835_codec_dev *decode;
@@ -2499,6 +2500,55 @@ destroy_component:
 	return ret;
 }
 
+static int bcm2835_codec_register_mc(struct media_device *mdev,
+				     struct bcm2835_codec_dev *dev,
+				     struct video_device *vdev)
+
+{
+	int ret;
+	struct media_link *link;
+
+	dev->v4l2_dev.mdev = mdev;
+
+	/* Create 3 entities */
+	vdev->entity.obj_type = MEDIA_ENTITY_TYPE_VIDEO_DEVICE;
+	vdev->entity.function = MEDIA_ENT_F_IO_V4L;
+	vdev->entity.name = vdev->name;
+
+	/* Needed just for backward compatibility with legacy MC API */
+	vdev->entity.info.dev.major = VIDEO_MAJOR;
+	vdev->entity.info.dev.minor = vdev->minor;
+
+	ret = media_device_register_entity(vdev->v4l2_dev->mdev,
+					   &vdev->entity);
+	if (ret < 0) {
+		pr_warn("%s: media_device_register_entity failed\n",
+			__func__);
+		return ret;
+	}
+
+	vdev->intf_devnode = media_devnode_create(vdev->v4l2_dev->mdev,
+						  MEDIA_INTF_T_V4L_VIDEO,
+						  0, VIDEO_MAJOR,
+						  vdev->minor);
+	if (!vdev->intf_devnode) {
+		media_device_unregister_entity(&vdev->entity);
+		return -ENOMEM;
+	}
+
+	link = media_create_intf_link(&vdev->entity,
+				      &vdev->intf_devnode->intf,
+				      MEDIA_LNK_FL_ENABLED |
+				      MEDIA_LNK_FL_IMMUTABLE);
+	if (!link) {
+		media_devnode_remove(vdev->intf_devnode);
+		media_device_unregister_entity(&vdev->entity);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 static int bcm2835_codec_create(struct bcm2835_codec_driver *drv,
 				struct bcm2835_codec_dev **new_dev,
 				enum bcm2835_codec_role role)
@@ -2525,17 +2575,19 @@ static int bcm2835_codec_create(struct bcm2835_codec_driver *drv,
 	if (ret)
 		goto vchiq_finalise;
 
-	ret = v4l2_device_register(&pdev->dev, &dev->v4l2_dev);
-	if (ret)
-		goto vchiq_finalise;
-
 	atomic_set(&dev->num_inst, 0);
 	mutex_init(&dev->dev_mutex);
 
+	/* Initialise the video device */
 	dev->vfd = bcm2835_codec_videodev;
+
 	vfd = &dev->vfd;
 	vfd->lock = &dev->dev_mutex;
 	vfd->v4l2_dev = &dev->v4l2_dev;
+
+	ret = v4l2_device_register(&pdev->dev, &dev->v4l2_dev);
+	if (ret)
+		goto vchiq_finalise;
 
 	switch (role) {
 	case DECODE:
@@ -2557,7 +2609,7 @@ static int bcm2835_codec_create(struct bcm2835_codec_driver *drv,
 		break;
 	default:
 		ret = -EINVAL;
-		goto unreg_dev;
+		goto unreg_entity;
 	}
 
 	ret = video_register_device(vfd, VFL_TYPE_GRABBER, video_nr);
@@ -2565,6 +2617,10 @@ static int bcm2835_codec_create(struct bcm2835_codec_driver *drv,
 		v4l2_err(&dev->v4l2_dev, "Failed to register video device\n");
 		goto unreg_dev;
 	}
+
+	ret = bcm2835_codec_register_mc(&drv->mdev, dev, vfd);
+	if (ret)
+		goto unreg_dev;
 
 	video_set_drvdata(vfd, dev);
 	snprintf(vfd->name, sizeof(vfd->name), "%s-%s",
@@ -2590,6 +2646,8 @@ err_m2m:
 	video_unregister_device(&dev->vfd);
 unreg_dev:
 	v4l2_device_unregister(&dev->v4l2_dev);
+unreg_entity:
+	media_entity_cleanup(&vfd->entity);
 vchiq_finalise:
 	vchiq_mmal_finalise(dev->instance);
 	return ret;
@@ -2613,6 +2671,7 @@ static int bcm2835_codec_destroy(struct bcm2835_codec_dev *dev)
 static int bcm2835_codec_probe(struct platform_device *pdev)
 {
 	struct bcm2835_codec_driver *drv;
+	struct media_device *mdev;
 	int ret = 0;
 
 	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
@@ -2620,6 +2679,16 @@ static int bcm2835_codec_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	drv->pdev = pdev;
+	mdev = &drv->mdev;
+	mdev->dev = &pdev->dev;
+
+	strscpy(mdev->model, bcm2835_codec_videodev.name, sizeof(mdev->model));
+	strscpy(mdev->serial, "0000", sizeof(mdev->serial));
+	strscpy(mdev->bus_info, "unicam-bus", sizeof(mdev->bus_info));
+
+	/* This should return the vgencmd version information or such .. */
+	mdev->hw_revision = 1;
+	media_device_init(mdev);
 
 	ret = bcm2835_codec_create(drv, &drv->decode, DECODE);
 	if (ret)
@@ -2631,6 +2700,10 @@ static int bcm2835_codec_probe(struct platform_device *pdev)
 
 	ret = bcm2835_codec_create(drv, &drv->isp, ISP);
 	if (ret)
+		goto out;
+
+	/* Register the media device node */
+	if (media_device_register(mdev) < 0)
 		goto out;
 
 	platform_set_drvdata(pdev, drv);
@@ -2658,6 +2731,8 @@ static int bcm2835_codec_remove(struct platform_device *pdev)
 	bcm2835_codec_destroy(drv->encode);
 
 	bcm2835_codec_destroy(drv->decode);
+
+	media_device_unregister(&drv->mdev);
 
 	return 0;
 }
