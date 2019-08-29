@@ -873,7 +873,9 @@ static void vb2_to_mmal_buffer(struct m2m_mmal_buffer *buf,
 	 */
 	buf->mmal.mmal_flags |= MMAL_BUFFER_HEADER_FLAG_FRAME_END;
 
-	buf->mmal.length = vb2->vb2_buf.planes[0].bytesused;
+	buf->mmal.length = vb2->vb2_buf.planes[0].bytesused ?
+			   vb2->vb2_buf.planes[0].bytesused :
+			   vb2->vb2_buf.planes[0].length;
 	/*
 	 * Minor ambiguity in the V4L2 spec as to whether passing in a 0 length
 	 * buffer, or one with V4L2_BUF_FLAG_LAST set denotes end of stream.
