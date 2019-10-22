@@ -1163,66 +1163,6 @@ static int bcm2835_isp_node_s_fmt_vid_out(struct file *file, void *priv,
 	return populate_qdata_fmt(f, node);
 }
 
-static int bcm2835_isp_node_querybuf(struct file *file, void *priv,
-				     struct v4l2_buffer *b)
-{
-	struct bcm2835_isp_node *node = video_drvdata(file);
-	int ret;
-
-	v4l2_info(&node_get_bcm2835_isp(node)->v4l2_dev,
-		  "Queuybuf for node %p\n", node);
-
-	/* locking should be handled by the queue->lock? */
-	ret = vb2_querybuf(&node->queue, b);
-
-	return ret;
-}
-
-static int bcm2835_isp_node_reqbufs(struct file *file, void *priv,
-				    struct v4l2_requestbuffers *rb)
-{
-	struct bcm2835_isp_node *node = video_drvdata(file);
-	int ret;
-
-	v4l2_info(&node_get_bcm2835_isp(node)->v4l2_dev,
-		  "Reqbufs for node %p\n", node);
-
-	/* locking should be handled by the queue->lock? */
-	ret = vb2_reqbufs(&node->queue, rb);
-
-	return ret;
-}
-
-static int bcm2835_isp_node_qbuf(struct file *file, void *priv,
-				 struct v4l2_buffer *b)
-{
-	struct bcm2835_isp_node *node = video_drvdata(file);
-	int ret;
-
-	v4l2_info(&node_get_bcm2835_isp(node)->v4l2_dev,
-		  "Queue buffer for node %p\n", node);
-
-	/* locking should be handled by the queue->lock? */
-	ret = vb2_qbuf(&node->queue, b);
-
-	return ret;
-}
-
-static int bcm2835_isp_node_dqbuf(struct file *file, void *priv,
-				  struct v4l2_buffer *b)
-{
-	struct bcm2835_isp_node *node = video_drvdata(file);
-	int ret;
-
-	v4l2_info(&node_get_bcm2835_isp(node)->v4l2_dev,
-		  "Dequeue buffer for node %p\n", node);
-
-	/* locking should be handled by the queue->lock? */
-	ret = vb2_dqbuf(&node->queue, b, file->f_flags & O_NONBLOCK);
-
-	return ret;
-}
-
 static int bcm2835_isp_node_streamon(struct file *file, void *priv,
 				     enum v4l2_buf_type type)
 {
@@ -1268,21 +1208,17 @@ static const struct v4l2_ioctl_ops bcm2835_isp_node_ioctl_ops = {
 	.vidioc_s_fmt_meta_cap		= bcm2835_isp_node_s_fmt_meta_cap,
 	.vidioc_try_fmt_vid_out		= bcm2835_isp_node_try_fmt_vid_out,
 	.vidioc_try_fmt_vid_cap		= bcm2835_isp_node_try_fmt_meta_cap,
-	.vidioc_reqbufs			= bcm2835_isp_node_reqbufs,
-	.vidioc_querybuf		= bcm2835_isp_node_querybuf,
-	.vidioc_qbuf			= bcm2835_isp_node_qbuf,
-	.vidioc_dqbuf			= bcm2835_isp_node_dqbuf,
+
+	.vidioc_reqbufs			= vb2_ioctl_reqbufs,
+	.vidioc_querybuf		= vb2_ioctl_querybuf,
+	.vidioc_qbuf			= vb2_ioctl_qbuf,
+	.vidioc_dqbuf			= vb2_ioctl_dqbuf,
+	.vidioc_expbuf			= vb2_ioctl_expbuf,
+	.vidioc_create_bufs		= vb2_ioctl_create_bufs,
+	.vidioc_prepare_buf		= vb2_ioctl_prepare_buf,
+
 	.vidioc_streamon		= bcm2835_isp_node_streamon,
 	.vidioc_streamoff		= bcm2835_isp_node_streamoff,
-};
-
-static const struct video_device bcm2835_isp_videodev = {
-	.name		= BCM2835_ISP_NAME,
-	.vfl_dir	= VFL_DIR_M2M, /* gets overwritten */
-	.fops		= &bcm2835_isp_fops,
-	.ioctl_ops	= &bcm2835_isp_node_ioctl_ops,
-	.minor		= -1,
-	.release	= video_device_release_empty,
 };
 
 /* Register a device node /dev/video<N> to go along with one of the ISP's input
@@ -1296,6 +1232,8 @@ static int register_node(struct platform_device *pdev,
 	int ret;
 
 	mutex_init(&node->node_lock);
+
+	node->open = 0;
 	node->type = INDEX_TO_NODE_TYPE(index);
 	switch (node->type) {
 	case NODE_TYPE_OUTPUT:
@@ -1319,11 +1257,22 @@ static int register_node(struct platform_device *pdev,
 		break;
 	}
 	node->node_group = node_group;
-	node->vfd = bcm2835_isp_videodev;
 	vfd = &node->vfd;
-	vfd->lock = &node->node_lock; /* get V4L2 to serialise our ioctls */
-	vfd->v4l2_dev = &node_group->isp_dev->v4l2_dev;
-	node->open = 0;
+
+	/* Initialise the the video node... */
+	vfd->vfl_type	= VFL_TYPE_GRABBER;
+	vfd->fops	= &bcm2835_isp_fops,
+	vfd->ioctl_ops	= &bcm2835_isp_node_ioctl_ops,
+	vfd->minor	= -1,
+	vfd->release	= video_device_release_empty,
+	vfd->queue	= &node->queue;
+	vfd->lock	= &node->node_lock; /* get V4L2 to serialise our ioctls */
+	vfd->v4l2_dev	= &node_group->isp_dev->v4l2_dev;
+	vfd->vfl_dir	= node->vfl_dir;
+
+	/* Define the device names */
+	snprintf(vfd->name, sizeof(node->vfd.name), "%s-%s%d",
+		 BCM2835_ISP_NAME, node->name, node->id);
 
 	ret = video_register_device(vfd, VFL_TYPE_GRABBER, video_nr + index);
 	if (ret) {
@@ -1334,10 +1283,11 @@ static int register_node(struct platform_device *pdev,
 	}
 
 	video_set_drvdata(vfd, node);
-	snprintf(vfd->name, sizeof(vfd->name), "%s", bcm2835_isp_videodev.name);
+
 	v4l2_info(&node_group->isp_dev->v4l2_dev,
 		  "device node %p (%s[%d]) registered as /dev/video%d\n", node,
 		  node->name, node->id, vfd->num);
+
 	return 0;
 }
 
@@ -1429,7 +1379,7 @@ media_controller_register_node(struct bcm2835_isp_node_group *node_group, int i,
 		ret = -ENOMEM;
 		goto error_no_mem;
 	}
-	snprintf(name, BCM2835_ISP_ENTITY_NAME_LEN, "%s%d-%s%d", node->vfd.name,
+	snprintf(name, BCM2835_ISP_ENTITY_NAME_LEN, "%s%d-%s%d", BCM2835_ISP_NAME,
 		 group_num, output ? "output" : "capture", i);
 	entity->name = name;
 	node->pad.flags = output ? MEDIA_PAD_FL_SOURCE : MEDIA_PAD_FL_SINK;
