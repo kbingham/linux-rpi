@@ -625,6 +625,8 @@ static int dw_axi_dma_set_hw_desc(struct axi_dma_chan *chan,
 		device_addr = chan->config.dst_addr;
 		ctllo = reg_width << CH_CTL_L_DST_WIDTH_POS |
 			mem_width << CH_CTL_L_SRC_WIDTH_POS |
+			DWAXIDMAC_BURST_TRANS_LEN_1 << CH_CTL_L_DST_MSIZE_POS |
+			DWAXIDMAC_BURST_TRANS_LEN_4 << CH_CTL_L_SRC_MSIZE_POS |
 			DWAXIDMAC_CH_CTL_L_NOINC << CH_CTL_L_DST_INC_POS |
 			DWAXIDMAC_CH_CTL_L_INC << CH_CTL_L_SRC_INC_POS;
 		block_ts = len >> mem_width;
@@ -634,6 +636,8 @@ static int dw_axi_dma_set_hw_desc(struct axi_dma_chan *chan,
 		device_addr = chan->config.src_addr;
 		ctllo = reg_width << CH_CTL_L_SRC_WIDTH_POS |
 			mem_width << CH_CTL_L_DST_WIDTH_POS |
+			DWAXIDMAC_BURST_TRANS_LEN_4 << CH_CTL_L_DST_MSIZE_POS |
+			DWAXIDMAC_BURST_TRANS_LEN_1 << CH_CTL_L_SRC_MSIZE_POS |
 			DWAXIDMAC_CH_CTL_L_INC << CH_CTL_L_DST_INC_POS |
 			DWAXIDMAC_CH_CTL_L_NOINC << CH_CTL_L_SRC_INC_POS;
 		block_ts = len >> reg_width;
@@ -669,9 +673,6 @@ static int dw_axi_dma_set_hw_desc(struct axi_dma_chan *chan,
 	}
 
 	hw_desc->lli->block_ts_lo = cpu_to_le32(block_ts - 1);
-
-	ctllo |= DWAXIDMAC_BURST_TRANS_LEN_4 << CH_CTL_L_DST_MSIZE_POS |
-		 DWAXIDMAC_BURST_TRANS_LEN_4 << CH_CTL_L_SRC_MSIZE_POS;
 	hw_desc->lli->ctl_lo = cpu_to_le32(ctllo);
 
 	set_desc_src_master(hw_desc);
