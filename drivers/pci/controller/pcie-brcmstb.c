@@ -92,6 +92,7 @@
 
 #define PCIE_MISC_PCIE_STATUS				0x4068
 #define  PCIE_MISC_PCIE_STATUS_PCIE_PORT_MASK		0x80
+#define  PCIE_MISC_PCIE_STATUS_PCIE_PORT_MASK_2712	0x40
 #define  PCIE_MISC_PCIE_STATUS_PCIE_DL_ACTIVE_MASK	0x20
 #define  PCIE_MISC_PCIE_STATUS_PCIE_PHYLINKUP_MASK	0x10
 #define  PCIE_MISC_PCIE_STATUS_PCIE_LINK_IN_L23_MASK	0x40
@@ -220,6 +221,7 @@ struct pcie_cfg_data {
 	const enum pcie_type type;
 	void (*perst_set)(struct brcm_pcie *pcie, u32 val);
 	void (*bridge_sw_init_set)(struct brcm_pcie *pcie, u32 val);
+	bool (*rc_mode)(struct brcm_pcie *pcie);
 };
 
 struct subdev_regulators {
@@ -266,6 +268,7 @@ struct brcm_pcie {
 	u32			hw_rev;
 	void			(*perst_set)(struct brcm_pcie *pcie, u32 val);
 	void			(*bridge_sw_init_set)(struct brcm_pcie *pcie, u32 val);
+	bool			(*rc_mode)(struct brcm_pcie *pcie);
 	struct subdev_regulators *sr;
 	bool			ep_wakeup_capable;
 };
@@ -673,12 +676,20 @@ static int brcm_pcie_enable_msi(struct brcm_pcie *pcie)
 }
 
 /* The controller is capable of serving in both RC and EP roles */
-static bool brcm_pcie_rc_mode(struct brcm_pcie *pcie)
+static bool brcm_pcie_rc_mode_generic(struct brcm_pcie *pcie)
 {
 	void __iomem *base = pcie->base;
 	u32 val = readl(base + PCIE_MISC_PCIE_STATUS);
 
 	return !!FIELD_GET(PCIE_MISC_PCIE_STATUS_PCIE_PORT_MASK, val);
+}
+
+static bool brcm_pcie_rc_mode_2712(struct brcm_pcie *pcie)
+{
+	void __iomem *base = pcie->base;
+	u32 val = readl(base + PCIE_MISC_PCIE_STATUS);
+
+	return 1; //XXX !!FIELD_GET(PCIE_MISC_PCIE_STATUS_PCIE_PORT_MASK_2712, val);
 }
 
 static bool brcm_pcie_link_up(struct brcm_pcie *pcie)
@@ -1222,6 +1233,7 @@ static void brcm_pcie_enter_l23(struct brcm_pcie *pcie)
 
 static int brcm_phy_cntl(struct brcm_pcie *pcie, const int start)
 {
+#if 0
 	static const u32 shifts[PCIE_DVT_PMU_PCIE_PHY_CTRL_DAST_NFLDS] = {
 		PCIE_DVT_PMU_PCIE_PHY_CTRL_DAST_PWRDN_SHIFT,
 		PCIE_DVT_PMU_PCIE_PHY_CTRL_DAST_RESET_SHIFT,
@@ -1254,6 +1266,9 @@ static int brcm_phy_cntl(struct brcm_pcie *pcie, const int start)
 		dev_err(pcie->dev, "failed to %s phy\n", (start ? "start" : "stop"));
 
 	return ret;
+#else
+	return 0;
+#endif
 }
 
 static inline int brcm_phy_start(struct brcm_pcie *pcie)
@@ -1470,6 +1485,7 @@ static const struct pcie_cfg_data generic_cfg = {
 	.type		= GENERIC,
 	.perst_set	= brcm_pcie_perst_set_generic,
 	.bridge_sw_init_set = brcm_pcie_bridge_sw_init_set_generic,
+	.rc_mode	= brcm_pcie_rc_mode_generic,
 };
 
 static const struct pcie_cfg_data bcm7425_cfg = {
@@ -1477,6 +1493,7 @@ static const struct pcie_cfg_data bcm7425_cfg = {
 	.type		= BCM7425,
 	.perst_set	= brcm_pcie_perst_set_generic,
 	.bridge_sw_init_set = brcm_pcie_bridge_sw_init_set_generic,
+	.rc_mode	= brcm_pcie_rc_mode_generic,
 };
 
 static const struct pcie_cfg_data bcm7435_cfg = {
@@ -1491,6 +1508,7 @@ static const struct pcie_cfg_data bcm4908_cfg = {
 	.type		= BCM4908,
 	.perst_set	= brcm_pcie_perst_set_4908,
 	.bridge_sw_init_set = brcm_pcie_bridge_sw_init_set_generic,
+	.rc_mode	= brcm_pcie_rc_mode_generic,
 };
 
 static const int pcie_offset_bcm7278[] = {
@@ -1506,6 +1524,7 @@ static const struct pcie_cfg_data bcm7278_cfg = {
 	.type		= BCM7278,
 	.perst_set	= brcm_pcie_perst_set_7278,
 	.bridge_sw_init_set = brcm_pcie_bridge_sw_init_set_7278,
+	.rc_mode	= brcm_pcie_rc_mode_generic,
 };
 
 static const struct pcie_cfg_data bcm2711_cfg = {
@@ -1513,11 +1532,14 @@ static const struct pcie_cfg_data bcm2711_cfg = {
 	.type		= BCM2711,
 	.perst_set	= brcm_pcie_perst_set_generic,
 	.bridge_sw_init_set = brcm_pcie_bridge_sw_init_set_generic,
+	.rc_mode	= brcm_pcie_rc_mode_generic,
 };
 
 static const int pcie_offsets_bcm2712[] = {
 	[EXT_CFG_INDEX] = 0x9000,
 	[EXT_CFG_DATA] = 0x9004,
+	[PCIE_HARD_DEBUG] = 0x4304,
+	[INTR2_CPU] = 0x4400,
 };
 
 static const struct pcie_cfg_data bcm2712_cfg = {
@@ -1525,6 +1547,7 @@ static const struct pcie_cfg_data bcm2712_cfg = {
 	.type		= BCM2712,
 	.perst_set	= brcm_pcie_perst_set_2712,
 	.bridge_sw_init_set = brcm_pcie_bridge_sw_init_set_2712,
+	.rc_mode	= brcm_pcie_rc_mode_2712,
 };
 
 static const struct of_device_id brcm_pcie_match[] = {
@@ -1581,6 +1604,7 @@ static int brcm_pcie_probe(struct platform_device *pdev)
 	pcie->type = data->type;
 	pcie->perst_set = data->perst_set;
 	pcie->bridge_sw_init_set = data->bridge_sw_init_set;
+	pcie->rc_mode = data->rc_mode;
 
 	pcie->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(pcie->base))
@@ -1618,7 +1642,7 @@ static int brcm_pcie_probe(struct platform_device *pdev)
 		return PTR_ERR(pcie->bridge_reset);
 	}
 
-	ret = reset_control_reset(pcie->rescal);
+	ret = reset_control_deassert(pcie->rescal);
 	if (ret)
 		dev_err(&pdev->dev, "failed to deassert 'rescal'\n");
 
