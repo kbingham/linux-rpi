@@ -1144,7 +1144,6 @@ static int brcm_pcie_setup(struct brcm_pcie *pcie)
 	tmp = readl(base + PCIE_MISC_UBUS_CTRL);
 	u32p_replace_bits(&tmp, 1, PCIE_MISC_UBUS_CTRL_UBUS_PCIE_REPLY_ERR_DIS_MASK);
 	u32p_replace_bits(&tmp, 1, PCIE_MISC_UBUS_CTRL_UBUS_PCIE_REPLY_DECERR_DIS_MASK);
-	pr_err("  write %x -> MISC_UBUS_CTRL\n", tmp);
 	writel(tmp, base + PCIE_MISC_UBUS_CTRL);
 	writel(0xffffffff, base + PCIE_MISC_AXI_READ_ERROR_DATA);
 
@@ -1219,7 +1218,7 @@ static int brcm_pcie_setup(struct brcm_pcie *pcie)
 	}
 
 	if (pcie->gen) {
-		pr_err("  brcm_pcie_set_gen(%d)\n", pcie->gen);
+		dev_info(pcie->dev, "Forcing gen %d\n", pcie->gen);
 		brcm_pcie_set_gen(pcie, pcie->gen);
 	}
 
@@ -1803,7 +1802,7 @@ static int brcm_pcie_probe(struct platform_device *pdev)
 
 	data = of_device_get_match_data(&pdev->dev);
 	if (!data) {
-		pr_err("failed to look up compatible string\n");
+		dev_err(&pdev->dev, "failed to look up compatible string\n");
 		return -EINVAL;
 	}
 
@@ -1888,13 +1887,13 @@ static int brcm_pcie_probe(struct platform_device *pdev)
 		u64 msi_phys_addr;
 
 		if (of_property_read_u64(msi_np, "brcm,msi-pci-addr", &msi_pci_addr)) {
-			pr_err("Unable to find MSI PCI address\n");
+			dev_err(pcie->dev, "Unable to find MSI PCI address\n");
 			ret = -EINVAL;
 			goto fail;
 		}
 
 		if (of_property_read_u64(msi_np, "reg", &msi_phys_addr)) {
-			pr_err("Unable to find MSI physical address\n");
+			dev_err(pcie->dev, "Unable to find MSI physical address\n");
 			ret = -EINVAL;
 			goto fail;
 		}
