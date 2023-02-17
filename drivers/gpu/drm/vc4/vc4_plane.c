@@ -593,6 +593,8 @@ static u32 vc4_lbm_size(struct drm_plane_state *state)
 	struct vc4_plane_state *vc4_state = to_vc4_plane_state(state);
 	struct vc4_dev *vc4 = to_vc4_dev(state->plane->dev);
 	u32 pix_per_line;
+	u32 word_align;
+	u32 lbm_align;
 	u32 lbm;
 
 	/* LBM is not needed when there's no vertical scaling. */
@@ -627,11 +629,26 @@ static u32 vc4_lbm_size(struct drm_plane_state *state)
 		lbm = pix_per_line * 16;
 	}
 
+	switch (vc4->gen) {
+	case VC4_GEN_4:
+		lbm_align = 64;
+		word_align = 2;
+		break;
+
+	case VC4_GEN_5:
+		lbm_align = 128;
+		word_align = 4;
+		break;
+
+	default:
+		return 0;
+	}
+
 	/* Align it to 64 or 128 (hvs5) bytes */
-	lbm = roundup(lbm, vc4->gen == VC4_GEN_5 ? 128 : 64);
+	lbm = roundup(lbm, lbm_align);
 
 	/* Each "word" of the LBM memory contains 2 or 4 (hvs5) pixels */
-	lbm /= vc4->gen == VC4_GEN_5 ? 4 : 2;
+	lbm /= word_align;
 
 	return lbm;
 }
