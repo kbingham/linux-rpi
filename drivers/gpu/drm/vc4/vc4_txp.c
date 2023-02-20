@@ -63,12 +63,6 @@
 # define TXP_WIDTH_MASK			GENMASK(15, 0)
 
 #define TXP_DST_CTRL		0x0c
-/* These bits are set to 0x54 */
-#define TXP_PILOT_SHIFT			24
-#define TXP_PILOT_MASK			GENMASK(31, 24)
-/* Bits 22-23 are set to 0x01 */
-#define TXP_VERSION_SHIFT		22
-#define TXP_VERSION_MASK		GENMASK(23, 22)
 
 /* Powers down the internal memory. */
 # define TXP_POWERDOWN			BIT(21)
@@ -83,9 +77,6 @@
  */
 # define TXP_BYTE_ENABLE_SHIFT		16
 # define TXP_BYTE_ENABLE_MASK		GENMASK(19, 16)
-
-/* Debug: Generate VSTART again at EOF. */
-# define TXP_VSTART_AT_EOF		BIT(15)
 
 /* Debug: Terminate the current frame immediately.  Stops AXI
  * writes.
@@ -117,18 +108,6 @@
 # define TXP_FORMAT_ARGB8888		13
 # define TXP_FORMAT_BGRA8888		14
 # define TXP_FORMAT_RGBA8888		15
-
-/* If TFORMAT is set, generates LT instead of T format. */
-# define TXP_LINEAR_UTILE		BIT(7)
-
-/* Rotate output by 90 degrees. */
-# define TXP_TRANSPOSE			BIT(6)
-
-/* Generate a tiled format for V3D. */
-# define TXP_TFORMAT			BIT(5)
-
-/* Generates some undefined test mode output. */
-# define TXP_TEST_MODE			BIT(4)
 
 /* Request odd field from HVS. */
 # define TXP_FIELD			BIT(3)
