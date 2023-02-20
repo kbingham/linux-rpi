@@ -390,7 +390,8 @@ dpi_16bit_gpio2:        &rp1_dpi_16bit_gpio2        { };
 };
 
 &hvs {
-	clocks = <&firmware_clocks 4>;
+	clocks = <&firmware_clocks 4>, <&firmware_clocks 16>;
+	clock-names = "core", "disp";
 };
 
 &pixelvalve0 {
@@ -401,7 +402,7 @@ dpi_16bit_gpio2:        &rp1_dpi_16bit_gpio2        { };
 	status = "disabled";
 };
 
-&pixelvalve2 {
+&txp {
 	status = "disabled";
 };
 
