@@ -284,23 +284,10 @@ static const struct of_device_id vc4_dma_range_matches[] = {
 	{}
 };
 
-/*
- * we need this helper function for determining presence of fkms
- * before it's been bound
- */
-static bool firmware_kms(void)
-{
-	return of_device_is_available(of_find_compatible_node(NULL, NULL,
-	       "raspberrypi,rpi-firmware-kms")) ||
-	       of_device_is_available(of_find_compatible_node(NULL, NULL,
-	       "raspberrypi,rpi-firmware-kms-2711"));
-}
-
 static int vc4_drm_bind(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	const struct drm_driver *driver;
-	struct rpi_firmware *firmware = NULL;
 	struct drm_device *drm;
 	struct vc4_dev *vc4;
 	struct device_node *node;
@@ -362,28 +349,28 @@ static int vc4_drm_bind(struct device *dev)
 			return ret;
 	}
 
-	node = of_find_compatible_node(NULL, NULL, "raspberrypi,bcm2835-firmware");
-	if (node) {
-		firmware = rpi_firmware_get(node);
-		of_node_put(node);
+	/* node = of_find_compatible_node(NULL, NULL, "raspberrypi,bcm2835-firmware"); */
+	/* if (node) { */
+	/*	firmware = rpi_firmware_get(node); */
+	/*	of_node_put(node); */
 
-		if (!firmware)
-			return -EPROBE_DEFER;
-	}
+	/*	if (!firmware) */
+	/*		return -EPROBE_DEFER; */
+	/* } */
 
 	ret = drm_aperture_remove_framebuffers(false, driver);
 	if (ret)
 		return ret;
 
-	if (firmware && !firmware_kms()) {
-		ret = rpi_firmware_property(firmware,
-					    RPI_FIRMWARE_NOTIFY_DISPLAY_DONE,
-					    NULL, 0);
-		if (ret)
-			drm_warn(drm, "Couldn't stop firmware display driver: %d\n", ret);
+	/* if (firmware && !firmware_kms()) { */
+	/*	ret = rpi_firmware_property(firmware, */
+	/*				    RPI_FIRMWARE_NOTIFY_DISPLAY_DONE, */
+	/*				    NULL, 0); */
+	/*	if (ret) */
+	/*		drm_warn(drm, "Couldn't stop firmware display driver: %d\n", ret); */
 
-		rpi_firmware_put(firmware);
-	}
+	/*	rpi_firmware_put(firmware); */
+	/* } */
 
 	ret = component_bind_all(dev, drm);
 	if (ret)
