@@ -179,13 +179,6 @@
 			status = "disabled";
 		};
 
-		hvs: hvs@7c580000 {
-			compatible = "brcm,bcm2712-hvs";
-			reg = <0x7c580000 0x8000>;
-			interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
-			status = "disabled";
-		};
-
 		dvp: clock@7c700000 {
 			compatible = "brcm,brcm2711-dvp";
 			reg = <0x7c700000 0x10>;

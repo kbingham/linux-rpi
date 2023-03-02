@@ -277,6 +277,7 @@ static const struct of_device_id vc4_dma_range_matches[] = {
 	{ .compatible = "brcm,bcm2711-hvs" },
 	{ .compatible = "brcm,bcm2835-hvs" },
 	{ .compatible = "brcm,bcm2711-hvs" },
+	{ .compatible = "brcm,bcm2712-hvs" },
 	{ .compatible = "raspberrypi,rpi-firmware-kms" },
 	{ .compatible = "brcm,bcm2835-v3d" },
 	{ .compatible = "brcm,cygnus-v3d" },
