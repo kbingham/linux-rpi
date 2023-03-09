@@ -1,0 +1,2 @@
+To use this hook, run:
+cp git_hooks/post_commit .git/hooks
