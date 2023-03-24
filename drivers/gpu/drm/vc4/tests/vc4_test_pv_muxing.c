@@ -732,10 +732,11 @@ static void drm_vc4_test_pv_muxing(struct kunit *test)
 	int ret;
 
 	for (i = 0; i < params->nencoders; i++) {
+		struct vc4_dummy_output *output;
 		enum vc4_encoder_type enc_type = params->encoders[i];
 
-		ret = vc4_mock_atomic_add_output(test, state, enc_type);
-		KUNIT_ASSERT_EQ(test, ret, 0);
+		output = vc4_mock_atomic_add_output(test, state, enc_type);
+		KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 	}
 
 	ret = drm_atomic_check_only(state);
@@ -761,10 +762,11 @@ static void drm_vc4_test_pv_muxing_invalid(struct kunit *test)
 	int ret;
 
 	for (i = 0; i < params->nencoders; i++) {
+		struct vc4_dummy_output *output;
 		enum vc4_encoder_type enc_type = params->encoders[i];
 
-		ret = vc4_mock_atomic_add_output(test, state, enc_type);
-		KUNIT_ASSERT_EQ(test, ret, 0);
+		output = vc4_mock_atomic_add_output(test, state, enc_type);
+		KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 	}
 
 	ret = drm_atomic_check_only(state);
@@ -868,6 +870,7 @@ static void drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable(struct kunit *tes
 {
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
+	struct vc4_dummy_output *output;
 	struct vc4_crtc_state *new_vc4_crtc_state;
 	struct vc4_hvs_state *new_hvs_state;
 	unsigned int hdmi0_channel;
@@ -887,8 +890,8 @@ static void drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable(struct kunit *tes
 
 	state->acquire_ctx = &ctx;
 
-	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
-	KUNIT_ASSERT_EQ(test, ret, 0);
+	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -914,8 +917,8 @@ static void drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable(struct kunit *tes
 
 	state->acquire_ctx = &ctx;
 
-	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
-	KUNIT_ASSERT_EQ(test, ret, 0);
+	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -944,6 +947,7 @@ static void drm_test_vc5_pv_muxing_bugs_stable_fifo(struct kunit *test)
 {
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
+	struct vc4_dummy_output *output;
 	struct vc4_crtc_state *new_vc4_crtc_state;
 	struct vc4_hvs_state *new_hvs_state;
 	unsigned int old_hdmi0_channel;
@@ -963,11 +967,11 @@ static void drm_test_vc5_pv_muxing_bugs_stable_fifo(struct kunit *test)
 
 	state->acquire_ctx = &ctx;
 
-	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
-	KUNIT_ASSERT_EQ(test, ret, 0);
+	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 
-	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
-	KUNIT_ASSERT_EQ(test, ret, 0);
+	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -1035,6 +1039,7 @@ drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable_too_many_crtc_state(struct ku
 {
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
+	struct vc4_dummy_output *output;
 	struct vc4_crtc_state *new_vc4_crtc_state;
 	struct drm_device *drm;
 	struct vc4_dev *vc4;
@@ -1051,8 +1056,8 @@ drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable_too_many_crtc_state(struct ku
 
 	state->acquire_ctx = &ctx;
 
-	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
-	KUNIT_ASSERT_EQ(test, ret, 0);
+	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -1067,8 +1072,8 @@ drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable_too_many_crtc_state(struct ku
 
 	state->acquire_ctx = &ctx;
 
-	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
-	KUNIT_ASSERT_EQ(test, ret, 0);
+	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
