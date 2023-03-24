@@ -237,3 +237,9 @@ struct vc4_dev *vc6_mock_device(struct kunit *test)
 {
 	return __mock_device(test, VC4_GEN_6);
 }
+
+struct drm_plane *
+vc4_mock_find_plane(struct kunit *test, struct drm_device *drm);
+
+struct drm_crtc *
+vc4_mock_find_crtc_for_plane(struct kunit *test, struct drm_plane *plane);
