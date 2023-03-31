@@ -1594,6 +1594,37 @@ static int vc4_plane_mode_set(struct drm_plane *plane,
 	return 0;
 }
 
+static u32 vc6_plane_get_csc_mode(struct vc4_plane_state *vc4_state)
+{
+	struct drm_plane_state *state = &vc4_state->base;
+	u32 ret = 0;
+
+	if (vc4_state->is_yuv) {
+		enum drm_color_encoding color_encoding = state->color_encoding;
+		enum drm_color_range color_range = state->color_range;
+
+		ret |= SCALER6_CTL2_CSC_ENABLE;
+
+		/* CSC pre-loaded with:
+		 * 0 = BT601 limited range
+		 * 1 = BT709 limited range
+		 * 2 = BT2020 limited range
+		 * 3 = BT601 full range
+		 * 4 = BT709 full range
+		 * 5 = BT2020 full range
+		 */
+		if (color_encoding > DRM_COLOR_YCBCR_BT2020)
+			color_encoding = DRM_COLOR_YCBCR_BT601;
+		if (color_range > DRM_COLOR_YCBCR_FULL_RANGE)
+			color_range = DRM_COLOR_YCBCR_LIMITED_RANGE;
+
+		ret |= VC4_SET_FIELD(color_encoding + (color_range * 3),
+				     SCALER6_CTL2_BRCM_CFC_CONTROL);
+	}
+
+	return ret;
+}
+
 static int vc6_plane_mode_set(struct drm_plane *plane,
 			      struct drm_plane_state *state)
 {
@@ -1638,6 +1669,7 @@ static int vc6_plane_mode_set(struct drm_plane *plane,
 
 	/* Control Word 2: Alpha Value & CSC */
 	vc4_dlist_write(vc4_state,
+			vc6_plane_get_csc_mode(vc4_state) |
 			vc4_hvs5_get_alpha_blend_mode(state) |
 			(mix_plane_alpha ? SCALER6_CTL2_ALPHA_MIX : 0) |
 			VC4_SET_FIELD(state->alpha >> 4, SCALER5_CTL2_ALPHA));

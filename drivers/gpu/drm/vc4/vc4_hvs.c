@@ -1467,49 +1467,113 @@ static int vc4_hvs_hw_init(struct vc4_hvs *hvs)
 	return 0;
 }
 
-#define CFC1_0_NL_CSC_CTRL		0xa000
-#define CFC1_0_MA_CSC_COEFF_C00		0xa008
-#define CFC1_0_MA_CSC_COEFF_C01		0xa00c
-#define CFC1_0_MA_CSC_COEFF_C02		0xa010
-#define CFC1_0_MA_CSC_COEFF_C03		0xa014
-#define CFC1_0_MA_CSC_COEFF_C04		0xa018
-#define CFC1_0_MA_CSC_COEFF_C10		0xa01c
-#define CFC1_0_MA_CSC_COEFF_C11		0xa020
-#define CFC1_0_MA_CSC_COEFF_C12		0xa024
-#define CFC1_0_MA_CSC_COEFF_C13		0xa028
-#define CFC1_0_MA_CSC_COEFF_C14		0xa02c
-#define CFC1_0_MA_CSC_COEFF_C20		0xa030
-#define CFC1_0_MA_CSC_COEFF_C21		0xa034
-#define CFC1_0_MA_CSC_COEFF_C22		0xa038
-#define CFC1_0_MA_CSC_COEFF_C23		0xa03c
-#define CFC1_0_MA_CSC_COEFF_C24		0xa040
+#define CFC1_N_NL_CSC_CTRL(x)		(0xa000 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C00(x)	(0xa008 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C01(x)	(0xa00c + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C02(x)	(0xa010 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C03(x)	(0xa014 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C04(x)	(0xa018 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C10(x)	(0xa01c + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C11(x)	(0xa020 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C12(x)	(0xa024 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C13(x)	(0xa028 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C14(x)	(0xa02c + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C20(x)	(0xa030 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C21(x)	(0xa034 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C22(x)	(0xa038 + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C23(x)	(0xa03c + ((x) * 0x3000))
+#define CFC1_N_MA_CSC_COEFF_C24(x)	(0xa040 + ((x) * 0x3000))
+
+/* 4 S2.22 multiplication factors, and 1 S9.15 addititive element for each of 3
+ * output components
+ */
+struct vc6_csc_coeff_entry {
+	u32 csc[3][5];
+};
+
+static const struct vc6_csc_coeff_entry csc_coeffs[2][3] = {
+	/* FIXME: Compute values */
+	[DRM_COLOR_YCBCR_LIMITED_RANGE] = {
+		[DRM_COLOR_YCBCR_BT601] = {
+			.csc = {
+				{ 0x004A8544, 0x0, 0x0072BC45, 0x0, 0xFF83F313 },
+				{ 0x004A8544, 0xFFF25A21, 0xFFDDE4D2, 0x0, 0x00267065 },
+				{ 0x004A8544, 0x00873198, 0x0, 0x0, 0xFF6F7DC0 }
+			}
+		},
+		[DRM_COLOR_YCBCR_BT709] = {
+			.csc = {
+				{ 0x004A8544, 0x0, 0x0072BC45, 0x0, 0xFF83F313 },
+				{ 0x004A8544, 0xFFF25A21, 0xFFDDE4D2, 0x0, 0x00267065 },
+				{ 0x004A8544, 0x00873198, 0x0, 0x0, 0xFF6F7DC0 }
+			}
+		},
+		[DRM_COLOR_YCBCR_BT2020] = {
+			.csc = {
+				{ 0x004A8544, 0x0, 0x0072BC45, 0x0, 0xFF83F313 },
+				{ 0x004A8544, 0xFFF25A21, 0xFFDDE4D2, 0x0, 0x00267065 },
+				{ 0x004A8544, 0x00873198, 0x0, 0x0, 0xFF6F7DC0 }
+			}
+		}
+	},
+	[DRM_COLOR_YCBCR_FULL_RANGE] = {
+		[DRM_COLOR_YCBCR_BT601] = {
+			.csc = {
+				{ 0x004A8544, 0x0, 0x0072BC45, 0x0, 0xFF83F313 },
+				{ 0x004A8544, 0xFFF25A21, 0xFFDDE4D2, 0x0, 0x00267065 },
+				{ 0x004A8544, 0x00873198, 0x0, 0x0, 0xFF6F7DC0 }
+			}
+		},
+		[DRM_COLOR_YCBCR_BT709] = {
+			.csc = {
+				{ 0x004A8544, 0x0, 0x0072BC45, 0x0, 0xFF83F313 },
+				{ 0x004A8544, 0xFFF25A21, 0xFFDDE4D2, 0x0, 0x00267065 },
+				{ 0x004A8544, 0x00873198, 0x0, 0x0, 0xFF6F7DC0 }
+			}
+		},
+		[DRM_COLOR_YCBCR_BT2020] = {
+			.csc = {
+				{ 0x004A8544, 0x0, 0x0072BC45, 0x0, 0xFF83F313 },
+				{ 0x004A8544, 0xFFF25A21, 0xFFDDE4D2, 0x0, 0x00267065 },
+				{ 0x004A8544, 0x00873198, 0x0, 0x0, 0xFF6F7DC0 }
+			}
+		}
+	}
+};
 
 static int vc6_hvs_hw_init(struct vc4_hvs *hvs)
 {
+	const struct vc6_csc_coeff_entry *coeffs;
+	unsigned int i;
+
 	HVS_WRITE(SCALER6_CONTROL,
 		  SCALER6_CONTROL_HVS_EN |
 		  SCALER6_CONTROL_ABORT_ON_EMPTY |
 		  VC4_SET_FIELD(3, SCALER6_CONTROL_MAX_REQS));
 
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C00, 0x004A8544);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C01, 0x0);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C02, 0x0072BC45);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C03, 0x0);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C04, 0xFF83F313);
+	for (i = 0; i < 6; i++) {
+		coeffs = &csc_coeffs[i / 3][i % 3];
 
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C10, 0x004A8544);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C11, 0xFFF25A21);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C12, 0xFFDDE4D2);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C13, 0x0);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C14, 0x00267065);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C00(i), coeffs->csc[0][0]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C01(i), coeffs->csc[0][1]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C02(i), coeffs->csc[0][2]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C03(i), coeffs->csc[0][3]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C04(i), coeffs->csc[0][4]);
 
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C20, 0x004A8544);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C21, 0x00873198);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C22, 0x0);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C23, 0x0);
-	HVS_WRITE(CFC1_0_MA_CSC_COEFF_C24, 0xFF6F7DC0);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C10(i), coeffs->csc[1][0]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C11(i), coeffs->csc[1][1]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C12(i), coeffs->csc[1][2]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C13(i), coeffs->csc[1][3]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C14(i), coeffs->csc[1][4]);
 
-	HVS_WRITE(CFC1_0_NL_CSC_CTRL, BIT(15));
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C20(i), coeffs->csc[2][0]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C21(i), coeffs->csc[2][1]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C22(i), coeffs->csc[2][2]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C23(i), coeffs->csc[2][3]);
+		HVS_WRITE(CFC1_N_MA_CSC_COEFF_C24(i), coeffs->csc[2][4]);
+
+		HVS_WRITE(CFC1_N_NL_CSC_CTRL(i), BIT(15));
+	}
 
 	return 0;
 }
