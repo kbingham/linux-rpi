@@ -40,3 +40,7 @@
 &txp {
 	status = "okay";
 };
+
+&v3d {
+	status = "okay";
+};
