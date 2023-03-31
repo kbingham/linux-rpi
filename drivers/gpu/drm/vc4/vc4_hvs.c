@@ -736,6 +736,7 @@ static int vc6_hvs_init_channel(struct vc4_hvs *hvs, struct drm_crtc *crtc,
 	struct vc4_crtc_state *vc4_crtc_state = to_vc4_crtc_state(crtc->state);
 	unsigned int chan = vc4_crtc_state->assigned_channel;
 	bool interlace = mode->flags & DRM_MODE_FLAG_INTERLACE;
+	u32 disp_ctrl1;
 	int idx;
 
 	WARN_ON_ONCE(vc4->gen != VC4_GEN_6);
@@ -745,8 +746,10 @@ static int vc6_hvs_init_channel(struct vc4_hvs *hvs, struct drm_crtc *crtc,
 
 	HVS_WRITE(SCALER6_DISPX_CTRL0(chan), SCALER6_DISPX_CTRL0_RESET);
 
+	disp_ctrl1 = HVS_READ(SCALER6_DISPX_CTRL1(chan));
+	disp_ctrl1 &= ~SCALER6_DISPX_CTRL1_INTLACE;
 	HVS_WRITE(SCALER6_DISPX_CTRL1(chan),
-		  (interlace ? SCALER6_DISPX_CTRL1_INTLACE : 0));
+		  disp_ctrl1 | (interlace ? SCALER6_DISPX_CTRL1_INTLACE : 0));
 
 	HVS_WRITE(SCALER6_DISPX_CTRL0(chan),
 		  SCALER6_DISPX_CTRL0_ENB |
@@ -1077,12 +1080,21 @@ void vc4_hvs_atomic_flush(struct drm_crtc *crtc,
 		 */
 		if (vc4->gen >= VC4_GEN_6)
 			HVS_WRITE(SCALER6_DISPX_CTRL1(channel),
-				  HVS_READ(SCALER6_DISPX_BGND(channel)) |
+				  HVS_READ(SCALER6_DISPX_CTRL1(channel)) |
 				  SCALER6_DISPX_CTRL1_BGENB);
 		else
 			HVS_WRITE(SCALER_DISPBKGNDX(channel),
 				  HVS_READ(SCALER_DISPBKGNDX(channel)) |
 				  SCALER_DISPBKGND_FILL);
+	} else {
+		if (vc4->gen >= VC4_GEN_6)
+			HVS_WRITE(SCALER6_DISPX_CTRL1(channel),
+				  HVS_READ(SCALER6_DISPX_CTRL1(channel)) &
+				  ~SCALER6_DISPX_CTRL1_BGENB);
+		else
+			HVS_WRITE(SCALER_DISPBKGNDX(channel),
+				  HVS_READ(SCALER_DISPBKGNDX(channel)) &
+				  ~SCALER_DISPBKGND_FILL);
 	}
 
 	/* Only update DISPLIST if the CRTC was already running and is not
