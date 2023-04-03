@@ -1649,6 +1649,20 @@ static int vc6_plane_mode_set(struct drm_plane *plane,
 	if (ret)
 		return ret;
 
+	/* SCL1 is used for Cb/Cr scaling of planar formats.  For RGB
+	 * and 4:4:4, scl1 should be set to scl0 so both channels of
+	 * the scaler do the same thing.  For YUV, the Y plane needs
+	 * to be put in channel 1 and Cb/Cr in channel 0, so we swap
+	 * the scl fields here.
+	 */
+	if (num_planes == 1) {
+		scl0 = vc4_get_scl_field(state, 0);
+		scl1 = scl0;
+	} else {
+		scl0 = vc4_get_scl_field(state, 1);
+		scl1 = vc4_get_scl_field(state, 0);
+	}
+
 	/* Control Word 0: Scaling Configuration & Element Validity*/
 	vc4_dlist_write(vc4_state,
 			SCALER6_CTL0_VALID |
@@ -1748,8 +1762,6 @@ static int vc6_plane_mode_set(struct drm_plane *plane,
 		    vc4_state->x_scaling[1] != VC4_SCALING_NONE ||
 		    vc4_state->y_scaling[0] != VC4_SCALING_NONE ||
 		    vc4_state->y_scaling[1] != VC4_SCALING_NONE) {
-			vc4_write_scaling_parameters(state, 0);
-
 			if (num_planes > 1)
 				/*
 				 * Emit Cb/Cr as channel 0 and Y as channel
@@ -1757,6 +1769,8 @@ static int vc6_plane_mode_set(struct drm_plane *plane,
 				 * above.
 				 */
 				vc4_write_scaling_parameters(state, 1);
+
+			vc4_write_scaling_parameters(state, 0);
 		}
 
 		/*
