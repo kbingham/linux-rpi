@@ -79,7 +79,7 @@
 
 	hvs: hvs@107c580000 {
 		compatible = "brcm,bcm2712-hvs";
-		reg = <0x10 0x7c580000 0xa400>;
+		reg = <0x10 0x7c580000 0x1a000>;
 		interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
 	};
