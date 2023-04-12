@@ -38,7 +38,7 @@
 };
 
 &txp {
-	status = "okay";
+	status = "disabled";
 };
 
 &v3d {
