@@ -2208,7 +2208,7 @@ struct drm_plane *vc4_plane_init(struct drm_device *dev,
 	};
 
 	for (i = 0; i < ARRAY_SIZE(hvs_formats); i++) {
-		if (!hvs_formats[i].hvs5_only || vc4->gen == VC4_GEN_5) {
+		if (!hvs_formats[i].hvs5_only || vc4->gen >= VC4_GEN_5) {
 			formats[num_formats] = hvs_formats[i].drm;
 			num_formats++;
 		}
