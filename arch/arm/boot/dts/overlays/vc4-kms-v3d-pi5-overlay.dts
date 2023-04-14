@@ -1,6 +1,10 @@
 /dts-v1/;
 /plugin/;
 
+/ {
+	compatible = "brcm,bcm2712";
+};
+
 &fb {
 	status = "disabled";
 };
