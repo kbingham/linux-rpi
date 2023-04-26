@@ -463,7 +463,7 @@ config RANDOM_TRUST_BOOTLOADER
 
 config RASPBERRYPI_GPIOMEM
         tristate "Rootless GPIO access via mmap() on Raspberry Pi boards"
-        default m
+        default y
         help
                 Provides users with root-free access to the GPIO registers
                 on the board. Calling mmap(/dev/gpiomem) will map the GPIO
