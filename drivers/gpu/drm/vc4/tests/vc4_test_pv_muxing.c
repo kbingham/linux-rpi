@@ -105,12 +105,6 @@ static const struct encoder_constraint vc5_encoder_constraints[] = {
 	ENCODER_CONSTRAINT(VC4_ENCODER_TYPE_HDMI1, 0, 1, 2),
 };
 
-static const struct encoder_constraint vc6_encoder_constraints[] = {
-	ENCODER_CONSTRAINT(VC4_ENCODER_TYPE_HDMI0, 0),
-	ENCODER_CONSTRAINT(VC4_ENCODER_TYPE_HDMI1, 1),
-	ENCODER_CONSTRAINT(VC4_ENCODER_TYPE_TXP, 2),
-};
-
 static bool check_vc4_encoder_constraints(enum vc4_encoder_type type, unsigned int channel)
 {
 	return __check_encoder_constraints(vc4_encoder_constraints,
@@ -122,13 +116,6 @@ static bool check_vc5_encoder_constraints(enum vc4_encoder_type type, unsigned i
 {
 	return __check_encoder_constraints(vc5_encoder_constraints,
 					   ARRAY_SIZE(vc5_encoder_constraints),
-					   type, channel);
-}
-
-static bool check_vc6_encoder_constraints(enum vc4_encoder_type type, unsigned int channel)
-{
-	return __check_encoder_constraints(vc6_encoder_constraints,
-					   ARRAY_SIZE(vc6_encoder_constraints),
 					   type, channel);
 }
 
@@ -145,7 +132,7 @@ get_vc4_crtc_state_for_encoder(struct kunit *test,
 	encoder = vc4_find_encoder_by_type(drm, type);
 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, encoder);
 
-	crtc = vc4_find_crtc_for_encoder(test, encoder);
+	crtc = vc4_find_crtc_for_encoder(test, drm, encoder);
 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, crtc);
 
 	new_crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
@@ -208,9 +195,6 @@ static void vc4_test_pv_muxing_desc(const struct pv_muxing_param *t, char *desc)
 
 #define VC5_PV_MUXING_TEST(_name, ...)		\
 	PV_MUXING_TEST(_name, vc5_mock_device, check_vc5_encoder_constraints, __VA_ARGS__)
-
-#define VC6_PV_MUXING_TEST(_name, ...)		\
-	PV_MUXING_TEST(_name, vc6_mock_device, check_vc6_encoder_constraints, __VA_ARGS__)
 
 static const struct pv_muxing_param vc4_test_pv_muxing_params[] = {
 	VC4_PV_MUXING_TEST("1 output: DSI0",
@@ -690,39 +674,6 @@ KUNIT_ARRAY_PARAM(vc5_test_pv_muxing_invalid,
 		  vc5_test_pv_muxing_invalid_params,
 		  vc4_test_pv_muxing_desc);
 
-static const struct pv_muxing_param vc6_test_pv_muxing_params[] = {
-	VC6_PV_MUXING_TEST("1 output: HDMI0",
-			   VC4_ENCODER_TYPE_HDMI0),
-	VC6_PV_MUXING_TEST("1 output: HDMI1",
-			   VC4_ENCODER_TYPE_HDMI1),
-	VC6_PV_MUXING_TEST("1 output: TXP",
-			   VC4_ENCODER_TYPE_TXP),
-	VC6_PV_MUXING_TEST("2 outputs: HDMI0, HDMI1",
-			   VC4_ENCODER_TYPE_HDMI0,
-			   VC4_ENCODER_TYPE_HDMI1),
-	VC6_PV_MUXING_TEST("2 outputs: HDMI0, TXP",
-			   VC4_ENCODER_TYPE_HDMI0,
-			   VC4_ENCODER_TYPE_TXP),
-	VC6_PV_MUXING_TEST("2 outputs: HDMI1, TXP",
-			   VC4_ENCODER_TYPE_HDMI1,
-			   VC4_ENCODER_TYPE_TXP),
-	VC6_PV_MUXING_TEST("3 outputs: HDMI0, HDMI1, TXP",
-			   VC4_ENCODER_TYPE_HDMI0,
-			   VC4_ENCODER_TYPE_HDMI1,
-			   VC4_ENCODER_TYPE_TXP),
-};
-
-KUNIT_ARRAY_PARAM(vc6_test_pv_muxing,
-		  vc6_test_pv_muxing_params,
-		  vc4_test_pv_muxing_desc);
-
-static const struct pv_muxing_param vc6_test_pv_muxing_invalid_params[] = {
-};
-
-KUNIT_ARRAY_PARAM(vc6_test_pv_muxing_invalid,
-		  vc6_test_pv_muxing_invalid_params,
-		  vc4_test_pv_muxing_desc);
-
 static void drm_vc4_test_pv_muxing(struct kunit *test)
 {
 	const struct pv_muxing_param *params = test->param_value;
@@ -732,11 +683,10 @@ static void drm_vc4_test_pv_muxing(struct kunit *test)
 	int ret;
 
 	for (i = 0; i < params->nencoders; i++) {
-		struct vc4_dummy_output *output;
 		enum vc4_encoder_type enc_type = params->encoders[i];
 
-		output = vc4_mock_atomic_add_output(test, state, enc_type);
-		KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+		ret = vc4_mock_atomic_add_output(test, state, enc_type);
+		KUNIT_ASSERT_EQ(test, ret, 0);
 	}
 
 	ret = drm_atomic_check_only(state);
@@ -762,11 +712,10 @@ static void drm_vc4_test_pv_muxing_invalid(struct kunit *test)
 	int ret;
 
 	for (i = 0; i < params->nencoders; i++) {
-		struct vc4_dummy_output *output;
 		enum vc4_encoder_type enc_type = params->encoders[i];
 
-		output = vc4_mock_atomic_add_output(test, state, enc_type);
-		KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+		ret = vc4_mock_atomic_add_output(test, state, enc_type);
+		KUNIT_ASSERT_EQ(test, ret, 0);
 	}
 
 	ret = drm_atomic_check_only(state);
@@ -846,21 +795,6 @@ static struct kunit_suite vc5_pv_muxing_test_suite = {
 	.test_cases = vc5_pv_muxing_tests,
 };
 
-static struct kunit_case vc6_pv_muxing_tests[] = {
-	KUNIT_CASE_PARAM(drm_vc4_test_pv_muxing,
-			 vc6_test_pv_muxing_gen_params),
-	KUNIT_CASE_PARAM(drm_vc4_test_pv_muxing_invalid,
-			 vc6_test_pv_muxing_invalid_gen_params),
-	{}
-};
-
-static struct kunit_suite vc6_pv_muxing_test_suite = {
-	.name = "vc6-pv-muxing-combinations",
-	.init = vc4_pv_muxing_test_init,
-	.exit = vc4_pv_muxing_test_exit,
-	.test_cases = vc6_pv_muxing_tests,
-};
-
 /* See
  * https://lore.kernel.org/all/3e113525-aa89-b1e2-56b7-ca55bd41d057@samsung.com/
  * and
@@ -870,7 +804,6 @@ static void drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable(struct kunit *tes
 {
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
-	struct vc4_dummy_output *output;
 	struct vc4_crtc_state *new_vc4_crtc_state;
 	struct vc4_hvs_state *new_hvs_state;
 	unsigned int hdmi0_channel;
@@ -890,8 +823,8 @@ static void drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable(struct kunit *tes
 
 	state->acquire_ctx = &ctx;
 
-	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
+	KUNIT_ASSERT_EQ(test, ret, 0);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -917,8 +850,8 @@ static void drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable(struct kunit *tes
 
 	state->acquire_ctx = &ctx;
 
-	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
+	KUNIT_ASSERT_EQ(test, ret, 0);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -947,7 +880,6 @@ static void drm_test_vc5_pv_muxing_bugs_stable_fifo(struct kunit *test)
 {
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
-	struct vc4_dummy_output *output;
 	struct vc4_crtc_state *new_vc4_crtc_state;
 	struct vc4_hvs_state *new_hvs_state;
 	unsigned int old_hdmi0_channel;
@@ -967,11 +899,11 @@ static void drm_test_vc5_pv_muxing_bugs_stable_fifo(struct kunit *test)
 
 	state->acquire_ctx = &ctx;
 
-	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
+	KUNIT_ASSERT_EQ(test, ret, 0);
 
-	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
+	KUNIT_ASSERT_EQ(test, ret, 0);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -1039,7 +971,6 @@ drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable_too_many_crtc_state(struct ku
 {
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
-	struct vc4_dummy_output *output;
 	struct vc4_crtc_state *new_vc4_crtc_state;
 	struct drm_device *drm;
 	struct vc4_dev *vc4;
@@ -1056,8 +987,8 @@ drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable_too_many_crtc_state(struct ku
 
 	state->acquire_ctx = &ctx;
 
-	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI0);
+	KUNIT_ASSERT_EQ(test, ret, 0);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -1072,8 +1003,8 @@ drm_test_vc5_pv_muxing_bugs_subsequent_crtc_enable_too_many_crtc_state(struct ku
 
 	state->acquire_ctx = &ctx;
 
-	output = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, output);
+	ret = vc4_mock_atomic_add_output(test, state, VC4_ENCODER_TYPE_HDMI1);
+	KUNIT_ASSERT_EQ(test, ret, 0);
 
 	ret = drm_atomic_check_only(state);
 	KUNIT_ASSERT_EQ(test, ret, 0);
@@ -1104,6 +1035,5 @@ static struct kunit_suite vc5_pv_muxing_bugs_test_suite = {
 kunit_test_suites(
 	&vc4_pv_muxing_test_suite,
 	&vc5_pv_muxing_test_suite,
-	&vc6_pv_muxing_test_suite,
 	&vc5_pv_muxing_bugs_test_suite
 );

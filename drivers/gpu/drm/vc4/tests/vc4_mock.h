@@ -3,52 +3,19 @@
 #ifndef VC4_MOCK_H_
 #define VC4_MOCK_H_
 
-#include <kunit/test.h>
-
 #include "../vc4_drv.h"
 
 static inline
 struct drm_crtc *vc4_find_crtc_for_encoder(struct kunit *test,
+					   struct drm_device *drm,
 					   struct drm_encoder *encoder)
 {
-	struct drm_device *drm = encoder->dev;
 	struct drm_crtc *crtc;
 
 	KUNIT_ASSERT_EQ(test, hweight32(encoder->possible_crtcs), 1);
 
 	drm_for_each_crtc(crtc, drm)
 		if (encoder->possible_crtcs & drm_crtc_mask(crtc))
-			return crtc;
-
-	return NULL;
-}
-
-static inline
-struct drm_plane *vc4_mock_find_plane_for_crtc(struct kunit *test,
-					       struct drm_crtc *crtc)
-{
-	struct drm_device *drm = crtc->dev;
-	struct drm_plane *plane;
-
-	drm_for_each_plane(plane, drm)
-		if (plane->possible_crtcs & drm_crtc_mask(crtc))
-			return plane;
-
-	return NULL;
-}
-
-static inline
-struct drm_crtc *vc4_mock_find_crtc_for_plane(struct kunit *test,
-					      struct drm_plane *plane)
-{
-	struct drm_device *drm = plane->dev;
-	struct drm_crtc *crtc;
-
-	if (plane->state && plane->state->crtc)
-		return plane->state->crtc;
-
-	drm_for_each_crtc(crtc, drm)
-		if (plane->possible_crtcs & drm_crtc_mask(crtc))
 			return crtc;
 
 	return NULL;
@@ -61,16 +28,6 @@ struct vc4_dummy_plane {
 struct vc4_dummy_plane *vc4_dummy_plane(struct kunit *test,
 					struct drm_device *drm,
 					enum drm_plane_type type);
-struct drm_plane *
-vc4_mock_atomic_add_plane(struct kunit *test,
-			  struct drm_atomic_state *state,
-			  struct drm_crtc *crtc);
-struct drm_framebuffer *
-vc4_mock_atomic_plane_add_fb(struct kunit *test,
-			     struct drm_atomic_state *state,
-			     struct drm_plane *plane,
-			     struct drm_file *file,
-			     struct drm_mode_fb_cmd2 *cmd);
 
 struct vc4_dummy_crtc {
 	struct vc4_crtc crtc;
@@ -95,12 +52,10 @@ struct vc4_dummy_output *vc4_dummy_output(struct kunit *test,
 
 struct vc4_dev *vc4_mock_device(struct kunit *test);
 struct vc4_dev *vc5_mock_device(struct kunit *test);
-struct vc4_dev *vc6_mock_device(struct kunit *test);
 
-struct vc4_dummy_output *
-vc4_mock_atomic_add_output(struct kunit *test,
-			   struct drm_atomic_state *state,
-			   enum vc4_encoder_type type);
+int vc4_mock_atomic_add_output(struct kunit *test,
+			       struct drm_atomic_state *state,
+			       enum vc4_encoder_type type);
 int vc4_mock_atomic_del_output(struct kunit *test,
 			       struct drm_atomic_state *state,
 			       enum vc4_encoder_type type);

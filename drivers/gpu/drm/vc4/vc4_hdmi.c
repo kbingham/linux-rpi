@@ -1125,25 +1125,16 @@ static void vc4_hdmi_encoder_post_crtc_disable(struct drm_encoder *encoder,
 
 	HDMI_WRITE(HDMI_RAM_PACKET_CONFIG, 0);
 
-	HDMI_WRITE(HDMI_VID_CTL,
-		   HDMI_READ(HDMI_VID_CTL) |
-		   VC4_HD_VID_CTL_CLRRGB |
-		   VC4_HD_VID_CTL_CLRSYNC |
-		   VC4_HD_VID_CTL_ENABLE);
-
-	HDMI_WRITE(HDMI_VID_CTL,
-		   HDMI_READ(HDMI_VID_CTL) |
-		   VC4_HD_VID_CTL_BLANKPIX);
-
-#warning Figure it out
-
-	/* HDMI_WRITE(HDMI_VID_CTL, */
-	/*	   HDMI_READ(HDMI_VID_CTL) & */
-	/*	   ~VC4_HD_VID_CTL_ENABLE); */
+	HDMI_WRITE(HDMI_VID_CTL, HDMI_READ(HDMI_VID_CTL) | VC4_HD_VID_CTL_CLRRGB);
 
 	spin_unlock_irqrestore(&vc4_hdmi->hw_lock, flags);
 
 	mdelay(1);
+
+	spin_lock_irqsave(&vc4_hdmi->hw_lock, flags);
+	HDMI_WRITE(HDMI_VID_CTL,
+		   HDMI_READ(HDMI_VID_CTL) & ~VC4_HD_VID_CTL_ENABLE);
+	spin_unlock_irqrestore(&vc4_hdmi->hw_lock, flags);
 
 	vc4_hdmi_disable_scrambling(encoder);
 
@@ -1158,6 +1149,7 @@ static void vc4_hdmi_encoder_post_crtc_powerdown(struct drm_encoder *encoder,
 {
 	struct vc4_hdmi *vc4_hdmi = encoder_to_vc4_hdmi(encoder);
 	struct drm_device *drm = vc4_hdmi->connector.dev;
+	unsigned long flags;
 	int ret;
 	int idx;
 
@@ -1165,6 +1157,11 @@ static void vc4_hdmi_encoder_post_crtc_powerdown(struct drm_encoder *encoder,
 
 	if (!drm_dev_enter(drm, &idx))
 		goto out;
+
+	spin_lock_irqsave(&vc4_hdmi->hw_lock, flags);
+	HDMI_WRITE(HDMI_VID_CTL,
+		   HDMI_READ(HDMI_VID_CTL) | VC4_HD_VID_CTL_BLANKPIX);
+	spin_unlock_irqrestore(&vc4_hdmi->hw_lock, flags);
 
 	if (vc4_hdmi->variant->phy_disable)
 		vc4_hdmi->variant->phy_disable(vc4_hdmi);
@@ -1546,7 +1543,9 @@ static void vc5_hdmi_set_timings(struct vc4_hdmi *vc4_hdmi,
 		     VC4_SET_FIELD(mode->crtc_vsync_start - mode->crtc_vdisplay,
 				   VC5_HDMI_VERTA_VFP) |
 		     VC4_SET_FIELD(mode->crtc_vdisplay, VC5_HDMI_VERTA_VAL));
-	u32 vertb = (VC4_SET_FIELD(mode->crtc_vtotal - mode->crtc_vsync_end +
+	u32 vertb = (VC4_SET_FIELD(mode->htotal >> (2 - pixel_rep),
+				   VC5_HDMI_VERTB_VSPO) |
+		     VC4_SET_FIELD(mode->crtc_vtotal - mode->crtc_vsync_end +
 				   interlaced,
 				   VC4_HDMI_VERTB_VBP));
 	u32 vertb_even = (VC4_SET_FIELD(0, VC5_HDMI_VERTB_VSPO) |
@@ -1742,6 +1741,7 @@ static void vc4_hdmi_encoder_pre_crtc_configure(struct drm_encoder *encoder,
 		goto err_put_runtime_pm;
 	}
 
+
 	vc4_hdmi_cec_update_clk_div(vc4_hdmi);
 
 	if (tmds_char_rate > 297000000)
@@ -1845,13 +1845,8 @@ static void vc4_hdmi_encoder_post_crtc_enable(struct drm_encoder *encoder,
 
 	spin_lock_irqsave(&vc4_hdmi->hw_lock, flags);
 
-#warning Figure it out
-	/* HDMI_WRITE(HDMI_VID_CTL, */
-	/*	   HDMI_READ(HDMI_VID_CTL) | */
-	/*	   VC4_HD_VID_CTL_ENABLE); */
-
 	HDMI_WRITE(HDMI_VID_CTL,
-		   HDMI_READ(HDMI_VID_CTL) |
+		   VC4_HD_VID_CTL_ENABLE |
 		   VC4_HD_VID_CTL_CLRRGB |
 		   VC4_HD_VID_CTL_UNDERFLOW_ENABLE |
 		   VC4_HD_VID_CTL_FRAME_COUNTER_RESET |
@@ -3612,7 +3607,6 @@ static int vc4_hdmi_runtime_suspend(struct device *dev)
 {
 	struct vc4_hdmi *vc4_hdmi = dev_get_drvdata(dev);
 
-	clk_disable_unprepare(vc4_hdmi->audio_clock);
 	clk_disable_unprepare(vc4_hdmi->hsm_rpm_clock);
 
 	return 0;
@@ -3653,10 +3647,6 @@ static int vc4_hdmi_runtime_resume(struct device *dev)
 		ret = -EINVAL;
 		goto err_disable_clk;
 	}
-
-	ret = clk_prepare_enable(vc4_hdmi->audio_clock);
-	if (ret)
-		goto err_disable_clk;
 
 	if (vc4_hdmi->variant->reset)
 		vc4_hdmi->variant->reset(vc4_hdmi);
@@ -3778,9 +3768,7 @@ static int vc4_hdmi_bind(struct device *dev, struct device *master, void *data)
 		return ret;
 
 	if ((of_device_is_compatible(dev->of_node, "brcm,bcm2711-hdmi0") ||
-	     of_device_is_compatible(dev->of_node, "brcm,bcm2711-hdmi1") ||
-	     of_device_is_compatible(dev->of_node, "brcm,bcm2712-hdmi0") ||
-	     of_device_is_compatible(dev->of_node, "brcm,bcm2712-hdmi1")) &&
+	     of_device_is_compatible(dev->of_node, "brcm,bcm2711-hdmi1")) &&
 	    HDMI_READ(HDMI_VID_CTL) & VC4_HD_VID_CTL_ENABLE) {
 		clk_prepare_enable(vc4_hdmi->pixel_clock);
 		clk_prepare_enable(vc4_hdmi->hsm_clock);
@@ -3915,66 +3903,10 @@ static const struct vc4_hdmi_variant bcm2711_hdmi1_variant = {
 	.hp_detect		= vc5_hdmi_hp_detect,
 };
 
-static const struct vc4_hdmi_variant bcm2712_hdmi0_variant = {
-	.encoder_type		= VC4_ENCODER_TYPE_HDMI0,
-	.debugfs_name		= "hdmi0_regs",
-	.card_name		= "vc4-hdmi-0",
-	.max_pixel_clock	= 600000000,
-	.registers		= vc6_hdmi_hdmi0_fields,
-	.num_registers		= ARRAY_SIZE(vc6_hdmi_hdmi0_fields),
-	.phy_lane_mapping	= {
-		PHY_LANE_0,
-		PHY_LANE_1,
-		PHY_LANE_2,
-		PHY_LANE_CK,
-	},
-	.unsupported_odd_h_timings	= true,
-	.external_irq_controller	= true,
-
-	.init_resources		= vc5_hdmi_init_resources,
-	.csc_setup		= vc5_hdmi_csc_setup,
-	.reset			= vc5_hdmi_reset,
-	.set_timings		= vc5_hdmi_set_timings,
-	.phy_init		= vc6_hdmi_phy_init,
-	.phy_disable		= vc6_hdmi_phy_disable,
-	.channel_map		= vc5_hdmi_channel_map,
-	.supports_hdr		= true,
-	.hp_detect		= vc5_hdmi_hp_detect,
-};
-
-static const struct vc4_hdmi_variant bcm2712_hdmi1_variant = {
-	.encoder_type		= VC4_ENCODER_TYPE_HDMI1,
-	.debugfs_name		= "hdmi1_regs",
-	.card_name		= "vc4-hdmi-1",
-	.max_pixel_clock	= 600000000,
-	.registers		= vc6_hdmi_hdmi1_fields,
-	.num_registers		= ARRAY_SIZE(vc6_hdmi_hdmi1_fields),
-	.phy_lane_mapping	= {
-		PHY_LANE_0,
-		PHY_LANE_1,
-		PHY_LANE_2,
-		PHY_LANE_CK,
-	},
-	.unsupported_odd_h_timings	= true,
-	.external_irq_controller	= true,
-
-	.init_resources		= vc5_hdmi_init_resources,
-	.csc_setup		= vc5_hdmi_csc_setup,
-	.reset			= vc5_hdmi_reset,
-	.set_timings		= vc5_hdmi_set_timings,
-	.phy_init		= vc6_hdmi_phy_init,
-	.phy_disable		= vc6_hdmi_phy_disable,
-	.channel_map		= vc5_hdmi_channel_map,
-	.supports_hdr		= true,
-	.hp_detect		= vc5_hdmi_hp_detect,
-};
-
 static const struct of_device_id vc4_hdmi_dt_match[] = {
 	{ .compatible = "brcm,bcm2835-hdmi", .data = &bcm2835_variant },
 	{ .compatible = "brcm,bcm2711-hdmi0", .data = &bcm2711_hdmi0_variant },
 	{ .compatible = "brcm,bcm2711-hdmi1", .data = &bcm2711_hdmi1_variant },
-	{ .compatible = "brcm,bcm2712-hdmi0", .data = &bcm2712_hdmi0_variant },
-	{ .compatible = "brcm,bcm2712-hdmi1", .data = &bcm2712_hdmi1_variant },
 	{}
 };
 

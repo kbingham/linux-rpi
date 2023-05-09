@@ -321,12 +321,6 @@ static const struct bcm2835_dma_cfg_data bcm2711_dma_cfg = {
 	.dma_mask = DMA_BIT_MASK(36),
 };
 
-static const struct bcm2835_dma_cfg_data bcm2712_dma_cfg = {
-	.chan_40bit_mask = BIT(6) | BIT(7) | BIT(8) | BIT(9) |
-				 BIT(10) | BIT(11),
-	.dma_mask = DMA_BIT_MASK(40),
-};
-
 static inline size_t bcm2835_dma_max_frame_length(struct bcm2835_chan *c)
 {
 	/* lite and normal channels have different max frame length */
@@ -536,7 +530,7 @@ static struct bcm2835_desc *bcm2835_dma_create_cb_chain(
 			control_block->info = info;
 			control_block->src = src;
 			control_block->dst = dst;
-			control_block->stride = (upper_32_bits(dst) << 8) | upper_32_bits(src);
+			control_block->stride = 0;
 			control_block->next = 0;
 		}
 
@@ -549,10 +543,7 @@ static struct bcm2835_desc *bcm2835_dma_create_cb_chain(
 				cyclic ? finalextrainfo : 0);
 
 			/* calculate new remaining length */
-			if (c->is_40bit_channel)
-				len -= ((struct bcm2711_dma40_scb *)control_block)->len;
-			else
-				len -= control_block->length;
+			len -= control_block->length;
 		}
 
 		/* link this the last controlblock */
@@ -561,21 +552,13 @@ static struct bcm2835_desc *bcm2835_dma_create_cb_chain(
 			 d->cb_list[frame - 1].cb)->next_cb =
 				to_bcm2711_cbaddr(cb_entry->paddr);
 		if (frame && !c->is_40bit_channel)
-			d->cb_list[frame - 1].cb->next = to_bcm2711_cbaddr(cb_entry->paddr);
+			d->cb_list[frame - 1].cb->next = cb_entry->paddr;
 
 		/* update src and dst and length */
-		if (src && (info & BCM2835_DMA_S_INC)) {
-			if (c->is_40bit_channel)
-				src += ((struct bcm2711_dma40_scb *)control_block)->len;
-			else
-				src += control_block->length;
-		}
-		if (dst && (info & BCM2835_DMA_D_INC)) {
-			if (c->is_40bit_channel)
-				dst += ((struct bcm2711_dma40_scb *)control_block)->len;
-			else
-				dst += control_block->length;
-		}
+		if (src && (info & BCM2835_DMA_S_INC))
+			src += control_block->length;
+		if (dst && (info & BCM2835_DMA_D_INC))
+			dst += control_block->length;
 
 		/* Length of total transfer */
 		if (c->is_40bit_channel)
@@ -703,10 +686,7 @@ static void bcm2835_dma_start_desc(struct bcm2835_chan *c)
 		writel(BCM2711_DMA40_ACTIVE | BCM2711_DMA40_CS_FLAGS(c->dreq),
 		       c->chan_base + BCM2711_DMA40_CS);
 	} else {
-		writel(BIT(31), c->chan_base + BCM2835_DMA_CS);
-
-		writel(to_bcm2711_cbaddr(d->cb_list[0].paddr),
-		       c->chan_base + BCM2835_DMA_ADDR);
+		writel(d->cb_list[0].paddr, c->chan_base + BCM2835_DMA_ADDR);
 		writel(BCM2835_DMA_ACTIVE | BCM2835_DMA_CS_FLAGS(c->dreq),
 		       c->chan_base + BCM2835_DMA_CS);
 	}
@@ -799,39 +779,20 @@ static size_t bcm2835_dma_desc_size_pos(struct bcm2835_desc *d, dma_addr_t addr)
 	unsigned int i;
 	size_t size;
 
-	if (d->c->is_40bit_channel) {
-		for (size = i = 0; i < d->frames; i++) {
-			struct bcm2711_dma40_scb *control_block =
-				(struct bcm2711_dma40_scb *)d->cb_list[i].cb;
-			size_t this_size = control_block->len;
-			dma_addr_t dma;
+	for (size = i = 0; i < d->frames; i++) {
+		struct bcm2835_dma_cb *control_block = d->cb_list[i].cb;
+		size_t this_size = control_block->length;
+		dma_addr_t dma;
 
-			if (d->dir == DMA_DEV_TO_MEM)
-				dma = control_block->dst;
-			else
-				dma = control_block->src;
+		if (d->dir == DMA_DEV_TO_MEM)
+			dma = control_block->dst;
+		else
+			dma = control_block->src;
 
-			if (size)
-				size += this_size;
-			else if (addr >= dma && addr < dma + this_size)
-				size += dma + this_size - addr;
-		}
-	} else {
-		for (size = i = 0; i < d->frames; i++) {
-			struct bcm2835_dma_cb *control_block = d->cb_list[i].cb;
-			size_t this_size = control_block->length;
-			dma_addr_t dma;
-
-			if (d->dir == DMA_DEV_TO_MEM)
-				dma = control_block->dst;
-			else
-				dma = control_block->src;
-
-			if (size)
-				size += this_size;
-			else if (addr >= dma && addr < dma + this_size)
-				size += dma + this_size - addr;
-		}
+		if (size)
+			size += this_size;
+		else if (addr >= dma && addr < dma + this_size)
+			size += dma + this_size - addr;
 	}
 
 	return size;
@@ -858,25 +819,20 @@ static enum dma_status bcm2835_dma_tx_status(struct dma_chan *chan,
 		struct bcm2835_desc *d = c->desc;
 		dma_addr_t pos;
 
-		if (d->dir == DMA_MEM_TO_DEV && c->is_40bit_channel) {
-			u64 lo_bits, hi_bits;
-
-			lo_bits = readl(c->chan_base + BCM2711_DMA40_SRC);
-			hi_bits = readl(c->chan_base + BCM2711_DMA40_SRCI) & 0xff;
-			pos = (hi_bits << 32) | lo_bits;
-		} else if (d->dir == DMA_MEM_TO_DEV && !c->is_40bit_channel) {
+		if (d->dir == DMA_MEM_TO_DEV && c->is_40bit_channel)
+			pos = readl(c->chan_base + BCM2711_DMA40_SRC) +
+				((readl(c->chan_base + BCM2711_DMA40_SRCI) &
+				  0xff) << 8);
+		else if (d->dir == DMA_MEM_TO_DEV && !c->is_40bit_channel)
 			pos = readl(c->chan_base + BCM2835_DMA_SOURCE_AD);
-		} else if (d->dir == DMA_DEV_TO_MEM && c->is_40bit_channel) {
-			u64 lo_bits, hi_bits;
-
-			lo_bits = readl(c->chan_base + BCM2711_DMA40_DEST);
-			hi_bits = readl(c->chan_base + BCM2711_DMA40_DESTI) & 0xff;
-			pos = (hi_bits << 32) | lo_bits;
-		} else if (d->dir == DMA_DEV_TO_MEM && !c->is_40bit_channel) {
+		else if (d->dir == DMA_DEV_TO_MEM && c->is_40bit_channel)
+			pos = readl(c->chan_base + BCM2711_DMA40_DEST) +
+				((readl(c->chan_base + BCM2711_DMA40_DESTI) &
+				  0xff) << 8);
+		else if (d->dir == DMA_DEV_TO_MEM && !c->is_40bit_channel)
 			pos = readl(c->chan_base + BCM2835_DMA_DEST_AD);
-		} else {
+		else
 			pos = 0;
-		}
 
 		txstate->residue = bcm2835_dma_desc_size_pos(d, pos);
 	} else {
@@ -1068,7 +1024,7 @@ static struct dma_async_tx_descriptor *bcm2835_dma_prep_dma_cyclic(
 		 d->cb_list[frames - 1].cb)->next_cb =
 			to_bcm2711_cbaddr(d->cb_list[0].paddr);
 	else
-		d->cb_list[d->frames - 1].cb->next = to_bcm2711_cbaddr(d->cb_list[0].paddr);
+		d->cb_list[d->frames - 1].cb->next = d->cb_list[0].paddr;
 
 	return vchan_tx_prep(&c->vc, &d->vd, flags);
 }
@@ -1188,7 +1144,7 @@ void bcm2711_dma40_memcpy(dma_addr_t dst, dma_addr_t src, size_t size)
 	scb->len = size;
 	scb->next_cb = 0;
 
-	writel(to_bcm2711_cbaddr(memcpy_scb_dma), memcpy_chan + BCM2711_DMA40_CB);
+	writel((u32)(memcpy_scb_dma >> 5), memcpy_chan + BCM2711_DMA40_CB);
 	writel(BCM2711_DMA40_MEMCPY_FLAGS + BCM2711_DMA40_ACTIVE,
 	       memcpy_chan + BCM2711_DMA40_CS);
 
@@ -1205,7 +1161,6 @@ EXPORT_SYMBOL(bcm2711_dma40_memcpy);
 static const struct of_device_id bcm2835_dma_of_match[] = {
 	{ .compatible = "brcm,bcm2835-dma", .data = &bcm2835_dma_cfg },
 	{ .compatible = "brcm,bcm2711-dma", .data = &bcm2711_dma_cfg },
-	{ .compatible = "brcm,bcm2712-dma", .data = &bcm2712_dma_cfg },
 	{},
 };
 MODULE_DEVICE_TABLE(of, bcm2835_dma_of_match);

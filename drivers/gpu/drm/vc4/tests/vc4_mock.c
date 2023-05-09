@@ -106,22 +106,6 @@ static const struct vc4_mock_desc vc5_mock =
 							      DRM_MODE_CONNECTOR_HDMIA)),
 );
 
-static const struct vc4_mock_desc vc6_mock =
-	VC4_MOCK_DESC(
-		VC4_MOCK_CRTC_DESC(&vc4_txp_crtc_data,
-				   VC4_MOCK_OUTPUT_DESC(VC4_ENCODER_TYPE_TXP,
-							DRM_MODE_ENCODER_VIRTUAL,
-							DRM_MODE_CONNECTOR_WRITEBACK)),
-		VC4_MOCK_PIXELVALVE_DESC(&bcm2712_pv0_data,
-					 VC4_MOCK_OUTPUT_DESC(VC4_ENCODER_TYPE_HDMI0,
-							      DRM_MODE_ENCODER_TMDS,
-							      DRM_MODE_CONNECTOR_HDMIA)),
-		VC4_MOCK_PIXELVALVE_DESC(&bcm2712_pv1_data,
-					 VC4_MOCK_OUTPUT_DESC(VC4_ENCODER_TYPE_HDMI1,
-							      DRM_MODE_ENCODER_TMDS,
-							      DRM_MODE_CONNECTOR_HDMIA)),
-);
-
 static int __build_one_pipe(struct kunit *test, struct drm_device *drm,
 			    const struct vc4_mock_pipe_desc *pipe)
 {
@@ -169,32 +153,14 @@ static int __build_mock(struct kunit *test, struct drm_device *drm,
 	return 0;
 }
 
-static struct vc4_dev *__mock_device(struct kunit *test, enum vc4_gen gen)
+static struct vc4_dev *__mock_device(struct kunit *test, bool is_vc5)
 {
-	const struct vc4_mock_desc *desc;
-	const struct drm_driver *drv;
 	struct drm_device *drm;
+	const struct drm_driver *drv = is_vc5 ? &vc5_drm_driver : &vc4_drm_driver;
+	const struct vc4_mock_desc *desc = is_vc5 ? &vc5_mock : &vc4_mock;
 	struct vc4_dev *vc4;
 	struct device *dev;
 	int ret;
-
-	switch (gen) {
-	case VC4_GEN_4:
-		drv = &vc4_drm_driver;
-		desc = &vc4_mock;
-		break;
-	case VC4_GEN_5:
-		drv = &vc5_drm_driver;
-		desc = &vc5_mock;
-		break;
-	case VC4_GEN_6:
-		drv = &vc5_drm_driver;
-		desc = &vc6_mock;
-		break;
-
-	default:
-		return NULL;
-	}
 
 	dev = drm_kunit_helper_alloc_device(test);
 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
@@ -205,9 +171,9 @@ static struct vc4_dev *__mock_device(struct kunit *test, enum vc4_gen gen)
 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, vc4);
 
 	vc4->dev = dev;
-	vc4->gen = gen;
+	vc4->is_vc5 = is_vc5;
 
-	vc4->hvs = __vc4_hvs_alloc(vc4, NULL, NULL);
+	vc4->hvs = __vc4_hvs_alloc(vc4, NULL);
 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, vc4->hvs);
 
 	drm = &vc4->base;
@@ -225,21 +191,10 @@ static struct vc4_dev *__mock_device(struct kunit *test, enum vc4_gen gen)
 
 struct vc4_dev *vc4_mock_device(struct kunit *test)
 {
-	return __mock_device(test, VC4_GEN_4);
+	return __mock_device(test, false);
 }
 
 struct vc4_dev *vc5_mock_device(struct kunit *test)
 {
-	return __mock_device(test, VC4_GEN_5);
+	return __mock_device(test, true);
 }
-
-struct vc4_dev *vc6_mock_device(struct kunit *test)
-{
-	return __mock_device(test, VC4_GEN_6);
-}
-
-struct drm_plane *
-vc4_mock_find_plane(struct kunit *test, struct drm_device *drm);
-
-struct drm_crtc *
-vc4_mock_find_crtc_for_plane(struct kunit *test, struct drm_plane *plane);

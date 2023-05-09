@@ -63,6 +63,12 @@
 # define TXP_WIDTH_MASK			GENMASK(15, 0)
 
 #define TXP_DST_CTRL		0x0c
+/* These bits are set to 0x54 */
+#define TXP_PILOT_SHIFT			24
+#define TXP_PILOT_MASK			GENMASK(31, 24)
+/* Bits 22-23 are set to 0x01 */
+#define TXP_VERSION_SHIFT		22
+#define TXP_VERSION_MASK		GENMASK(23, 22)
 
 /* Powers down the internal memory. */
 # define TXP_POWERDOWN			BIT(21)
@@ -77,6 +83,9 @@
  */
 # define TXP_BYTE_ENABLE_SHIFT		16
 # define TXP_BYTE_ENABLE_MASK		GENMASK(19, 16)
+
+/* Debug: Generate VSTART again at EOF. */
+# define TXP_VSTART_AT_EOF		BIT(15)
 
 /* Debug: Terminate the current frame immediately.  Stops AXI
  * writes.
@@ -108,6 +117,18 @@
 # define TXP_FORMAT_ARGB8888		13
 # define TXP_FORMAT_BGRA8888		14
 # define TXP_FORMAT_RGBA8888		15
+
+/* If TFORMAT is set, generates LT instead of T format. */
+# define TXP_LINEAR_UTILE		BIT(7)
+
+/* Rotate output by 90 degrees. */
+# define TXP_TRANSPOSE			BIT(6)
+
+/* Generate a tiled format for V3D. */
+# define TXP_TFORMAT			BIT(5)
+
+/* Generates some undefined test mode output. */
+# define TXP_TEST_MODE			BIT(4)
 
 /* Request odd field from HVS. */
 # define TXP_FIELD			BIT(3)
@@ -266,7 +287,6 @@ static void vc4_txp_connector_atomic_commit(struct drm_connector *conn,
 					struct drm_atomic_state *state)
 {
 	struct drm_device *drm = conn->dev;
-	struct vc4_dev *vc4 = to_vc4_dev(drm);
 	struct drm_connector_state *conn_state = drm_atomic_get_new_connector_state(state,
 										    conn);
 	struct vc4_txp *txp = connector_to_vc4_txp(conn);
@@ -292,7 +312,7 @@ static void vc4_txp_connector_atomic_commit(struct drm_connector *conn,
 		return;
 
 	ctrl = TXP_GO | TXP_EI |
-	       (vc4->gen < VC4_GEN_6) ? VC4_SET_FIELD(0xf, TXP_BYTE_ENABLE) : 0 |
+	       VC4_SET_FIELD(0xf, TXP_BYTE_ENABLE) |
 	       VC4_SET_FIELD(txp_fmts[i], TXP_FORMAT);
 
 	if (fb->format->has_alpha)
@@ -346,7 +366,6 @@ static const struct drm_connector_funcs vc4_txp_connector_funcs = {
 static void vc4_txp_encoder_disable(struct drm_encoder *encoder)
 {
 	struct drm_device *drm = encoder->dev;
-	struct vc4_dev *vc4 = to_vc4_dev(drm);
 	struct vc4_txp *txp = encoder_to_vc4_txp(encoder);
 	int idx;
 
@@ -365,8 +384,7 @@ static void vc4_txp_encoder_disable(struct drm_encoder *encoder)
 		WARN_ON(TXP_READ(TXP_DST_CTRL) & TXP_BUSY);
 	}
 
-	if (vc4->gen < VC4_GEN_6)
-		TXP_WRITE(TXP_DST_CTRL, TXP_POWERDOWN);
+	TXP_WRITE(TXP_DST_CTRL, TXP_POWERDOWN);
 
 	drm_dev_exit(idx);
 }
@@ -566,7 +584,6 @@ static int vc4_txp_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id vc4_txp_dt_match[] = {
-	{ .compatible = "brcm,bcm2712-moplet" },
 	{ .compatible = "brcm,bcm2835-txp" },
 	{ /* sentinel */ },
 };
