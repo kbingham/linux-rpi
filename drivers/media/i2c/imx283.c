@@ -1183,6 +1183,24 @@ static int imx283_start_streaming(struct imx283 *imx283,
 		/* Clamp our top position now that VOB is handled */
 		top = max_t(s16, 0, top);
 
+		/*
+		 * The all-pixel scan modes introduce an 'extra line' at the
+		 * start of the image when not flipped. This is understood to be
+		 * a mechanism to preserve bayer ordering regardless of vflip
+		 * however it introduces an undesirable line of black pixels.
+		 *
+		 * Crop this by adding two extra lines and moving them into the
+		 * OB data type without impacting the effective image height or
+		 * positioning.
+		 */
+		if ((scan_mode(mode->scan, IMX283_MODE_0) ||
+		     scan_mode(mode->scan, IMX283_MODE_1)) &&
+		    top > 2) {
+			top -= 2;
+			v_ob += 2;
+			write_v_size += 2;
+		}
+
 		if (imx283->vflip->val)
 			top = -top;
 
